@@ -37,33 +37,18 @@ The **LLM Lab Backend** handles all core logic for the LLM experimentation platf
 - Stores experiment data in a database (via MongoDB)
 - Serves data to the frontend via RESTful
 
----
 
-│
-▼
-┌──────────────────────────────┐
-│ Backend │
-│ Express / NestJS + MongoDB │
-│ - LLM API integration │
-│ - Quality metric engine │
-│ - Experiment persistence │
-└──────────────┬───────────────┘
 
-data |
-
-| **API Integration** |Gemini  |
-| **Environment Management** | [dotenv](https://www.npmjs.com/package/dotenv) | Loads environment variables |
-| **Code Quality** | ESLint, Prettier | Enforces clean, consistent code |
-
----
-
-Create environment variables
 
 Create a .env file in the project root and add:
 
+## Create environment variables
+
+```bash
 PORT=<your_port>
 GEMINI_API_KEY=<your_gemini_api>
 MONGO_URI=<mongo_uri>
+```
 
 Open [https://llm-lab-backend.onrender.com](https://llm-lab-frontend-one.vercel.app/) with your browser to see the result.
 
