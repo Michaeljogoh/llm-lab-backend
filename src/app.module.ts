@@ -8,6 +8,8 @@ import configuration from 'src/config/configuration';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
 
+import { FavoritesModule } from './favorites/favorites.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
@@ -28,6 +30,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
     }),
     ExperimentModule,
     LlmModule,
+    FavoritesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
