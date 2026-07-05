@@ -1,101 +1,175 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# LLM Lab — Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+The backend API powering the LLM Lab experimentation platform. It orchestrates parameterized LLM calls, computes response quality metrics, runs background sweeps with progress tracking, and persists experiment data for comparison and analysis.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
+## Tech Stack
 
+- **Runtime:** Node.js with TypeScript
+- **Framework:** NestJS v11
+- **Database:** MongoDB (via Mongoose)
+- **LLM Provider:** Google Gemini (multi-model support)
+- **Validation:** class-validator / class-transformer
+- **Rate Limiting:** @nestjs/throttler (10 requests / 60s)
 
-## Description
+## Architecture
 
-# 🧠 LLM Lab Backend
-
-> Backend API for the **LLM Lab** project — powering the experimental for analyzing and comparing Large Language Model (LLM) responses.
-
----
-
-## 🚀 Overview
-
-The **LLM Lab Backend** handles all core logic for the LLM experimentation platform:
-- Communicates with one or more LLM APIs (Gemini)
-- Processes parameterized prompt requests
-- Computes programmatic quality metrics (coherence, completeness, etc.)
-- Stores experiment data in a database (via MongoDB)
-- Serves data to the frontend via RESTful
-
-
-
-
-Create a .env file in the project root and add:
-
-## Create environment variables
-
-```bash
-PORT=<your_port>
-GEMINI_API_KEY=<your_gemini_api>
-MONGO_URI=<mongo_uri>
+```
+src/
+├── config/                    # Environment configuration
+├── experiment/
+│   ├── constants/             # Presets, benchmarks, scoring weights
+│   ├── dto/                   # Request validation
+│   ├── schemas/               # Mongoose schemas
+│   ├── experiment.service.ts  # Orchestration + background jobs
+│   ├── sweep-suggest.service.ts
+│   └── experiment.controller.ts
+├── favorites/                 # Server-synced favorites (anonymous client ID)
+├── llm/                       # Gemini integration + LLM-as-judge
+├── metrics/                   # Weighted heuristic scoring engine
+└── helpers/                   # Parameter combinations, retry/backoff
 ```
 
-Open [https://llm-lab-backend.onrender.com](https://llm-lab-frontend-one.vercel.app/) with your browser to see the result.
+| Module | Responsibility |
+|--------|----------------|
+| **ExperimentModule** | CRUD, async sweeps, duplicate/narrow/regression/benchmark |
+| **LlmModule** | Gemini calls with system prompts, multi-model, token/cost metadata |
+| **MetricsService** | Eight heuristic metrics with configurable weights |
+| **SweepSuggestService** | Parameter impact analysis + heatmap data |
+| **FavoritesModule** | Persist starred experiments per anonymous client |
 
-## Project setup
+## Features
 
-```bash
-$ npm install
+### Core sweep engine
+- Cartesian product sweeps across **temperature**, **topP**, **topK**, and **maxToken**
+- Optional **system prompt** on every variant
+- **Multi-model sweeps** — run the same grid on multiple Gemini models
+- **Custom scoring weights** — tune how each metric contributes to the composite score
+
+### Background jobs & reliability
+- Experiments return immediately with `status: queued` and process **asynchronously**
+- Live **progress** tracking (`completed / total / failed`)
+- **Retry with exponential backoff** on Gemini 429 / quota errors
+- **Resume** incomplete sweeps from the last completed variant
+
+### Analysis & iteration
+- **Parameter heatmap data** — temperature × topP average scores
+- **Auto-suggest next sweep** — narrows the grid around the best variant
+- **Duplicate experiment** — re-run the same config
+- **Narrow sweep** — focused grid from the winning parameters
+- **Regression check** — re-run and compare best score vs baseline
+
+### LLM-as-judge
+- Optional **judge pass** per variant during sweep (`enableJudge: true`)
+- On-demand **POST /experiment/:id/judge** for existing experiments
+- Stores `judgeScore` + `judgeRationale` alongside heuristic scores
+
+### Prompt presets & benchmarks
+- **GET /experiment/presets** — curated templates (explain, JSON, marketing, code review)
+- **POST /experiment/benchmark** — golden suite of 5 standard prompts with default grids
+
+### Sharing & organization
+- **Public share links** via `shareToken` (read-only)
+- **Tags** on experiments for filtering
+- **Human ratings** (`up` / `down`) per response
+
+### Cost & latency
+- Per-variant **latencyMs**, **inputTokens**, **outputTokens**
+- **estimatedCostUsd** based on model pricing table
+
+### Favorites (server-synced)
+- Anonymous **`X-Client-Id`** header syncs stars to MongoDB
+- Endpoints: `GET /favorites`, `POST /favorites/sync`, `PATCH /favorites/:id/toggle`
+
+### Export
+- Full experiment JSON via **GET /experiment/:id/export/json**
+
+## How It Works
+
+1. Client submits a prompt, optional system prompt, parameter arrays, models, and scoring weights.
+2. API creates an experiment in `queued` state and starts background processing.
+3. For each parameter × model combination, Gemini is called with retry/backoff.
+4. Each response is scored with weighted heuristics; optional judge pass runs.
+5. On completion, **suggested next sweep** is computed from parameter impact analysis.
+6. Progress and results are persisted in MongoDB for polling and export.
+
+## API Endpoints
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/` | Health check |
+| `GET` | `/experiment/presets` | List prompt sweep templates |
+| `POST` | `/experiment/benchmark` | Run golden benchmark suite |
+| `POST` | `/experiment` | Create experiment (async background sweep) |
+| `GET` | `/experiment` | List all experiments |
+| `GET` | `/experiment/share/:token` | Public read-only shared experiment |
+| `GET` | `/experiment/:id` | Get experiment by ID |
+| `GET` | `/experiment/:id/status` | Poll job status + progress |
+| `GET` | `/experiment/:id/heatmap` | Temperature × topP heatmap data |
+| `GET` | `/experiment/:id/suggest-sweep` | Suggested narrowed parameter grid |
+| `GET` | `/experiment/:id/export/json` | Export full experiment JSON |
+| `POST` | `/experiment/:id/resume` | Resume incomplete sweep |
+| `POST` | `/experiment/:id/duplicate` | Clone and re-queue sweep |
+| `POST` | `/experiment/:id/narrow-sweep` | Queue focused sweep around winner |
+| `POST` | `/experiment/:id/judge` | Run LLM judge on all responses |
+| `POST` | `/experiment/:id/regression` | Re-run and compare vs baseline |
+| `PATCH` | `/experiment/:id/share` | Enable/disable public share link |
+| `PATCH` | `/experiment/:id/tags` | Update experiment tags |
+| `PATCH` | `/experiment/:id/responses/:index/rate` | Human thumbs up/down |
+| `DELETE` | `/experiment/:id` | Delete experiment |
+| `GET` | `/favorites` | List favorited experiment IDs |
+| `POST` | `/favorites/sync` | Sync favorites from client |
+| `PATCH` | `/favorites/:experimentId/toggle` | Toggle favorite |
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+
+- MongoDB instance (local or hosted)
+- Google Gemini API key
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+PORT=4000
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.0-flash-001
+GEMINI_MODELS=gemini-2.0-flash-001,gemini-2.5-flash,gemini-2.5-flash-lite
+MONGO_URI=your_mongodb_connection_string
 ```
 
-## Compile and run the project
+### Installation
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+### Running the Server
 
 ```bash
-# unit tests
-$ npm run test
+# Development (watch mode)
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Production
+npm run start:prod
 ```
 
+The server starts on `http://localhost:4000` by default.
 
+### Running Tests
 
-## Support
+```bash
+npm run test
+npm run test:e2e
+npm run test:cov
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+## Deployment
 
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+The backend is deployed on [Render](https://llm-lab-backend.onrender.com).
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT
