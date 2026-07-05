@@ -136,7 +136,6 @@ Create a `.env` file in the project root:
 PORT=4000
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-2.0-flash-001
-GEMINI_MODELS=gemini-2.0-flash-001,gemini-2.5-flash,gemini-2.5-flash-lite
 MONGO_URI=your_mongodb_connection_string
 ```
 
